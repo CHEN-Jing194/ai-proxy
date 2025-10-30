@@ -155,9 +155,25 @@ app.use(async (c, next) => {
       }
     })
 
-    // 单独设置 Content-Type，确保不会被重复设置
+    // 对于文件上传请求，特殊处理 Content-Type
+    const isFileUpload = url.pathname.includes("/upload/") || url.searchParams.has("upload_type")
+
     if (contentType) {
-      headers.set("Content-Type", contentType)
+      // 如果是文件上传且 Content-Type 包含多个值（用逗号分隔）
+      // 只保留非 application/json 的部分
+      if (isFileUpload && contentType.includes(",")) {
+        const types = contentType.split(",").map(t => t.trim())
+        // 过滤掉 application/json，保留实际的文件 MIME 类型
+        const fileType = types.find(t => !t.startsWith("application/json"))
+        if (fileType) {
+          headers.set("Content-Type", fileType)
+          console.log("[File Upload] 修正 Content-Type:", contentType, "->", fileType)
+        } else {
+          headers.set("Content-Type", contentType)
+        }
+      } else {
+        headers.set("Content-Type", contentType)
+      }
     }
 
     const targetUrl = `${proxy.target}${url.pathname.replace(
@@ -165,14 +181,14 @@ app.use(async (c, next) => {
       "/",
     )}${url.search}`
 
-    // 对于 Google 文件上传请求，增加超时时间并打印调试信息
-    const isFileUpload = url.pathname.includes("/upload/") || url.searchParams.has("upload_type")
+    // 对于 Google 文件上传请求，增加超时时间
     const timeout = isFileUpload ? 300000 : 60000 // 文件上传超时设为 5 分钟
 
     // 调试日志：打印文件上传请求的关键信息
     if (isFileUpload) {
       console.log("[File Upload] Target URL:", targetUrl)
-      console.log("[File Upload] Content-Type:", contentType)
+      console.log("[File Upload] 原始 Content-Type:", contentType)
+      console.log("[File Upload] 最终 Content-Type:", headers.get("Content-Type"))
       console.log("[File Upload] Method:", c.req.method)
     }
 
