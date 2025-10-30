@@ -135,6 +135,8 @@ app.use(async (c, next) => {
     const headers = new Headers()
     headers.set("host", new URL(proxy.target).hostname)
 
+    // 收集原始请求的 headers，但要特别处理 Content-Type
+    let contentType: string | null = null
     c.req.raw.headers.forEach((value, key) => {
       const k = key.toLowerCase()
       if (
@@ -144,20 +146,41 @@ app.use(async (c, next) => {
         k !== "x-real-ip" &&
         k !== "host"
       ) {
-        headers.set(key, value)
+        // 对于 Content-Type，先保存下来，后面单独处理
+        if (k === "content-type") {
+          contentType = value
+        } else {
+          headers.set(key, value)
+        }
       }
     })
+
+    // 单独设置 Content-Type，确保不会被重复设置
+    if (contentType) {
+      headers.set("Content-Type", contentType)
+    }
 
     const targetUrl = `${proxy.target}${url.pathname.replace(
       `/${proxy.pathSegment}/`,
       "/",
     )}${url.search}`
 
+    // 对于 Google 文件上传请求，增加超时时间并打印调试信息
+    const isFileUpload = url.pathname.includes("/upload/") || url.searchParams.has("upload_type")
+    const timeout = isFileUpload ? 300000 : 60000 // 文件上传超时设为 5 分钟
+
+    // 调试日志：打印文件上传请求的关键信息
+    if (isFileUpload) {
+      console.log("[File Upload] Target URL:", targetUrl)
+      console.log("[File Upload] Content-Type:", contentType)
+      console.log("[File Upload] Method:", c.req.method)
+    }
+
     const res = await fetchWithTimeout(targetUrl, {
       method: c.req.method,
       headers,
       body: c.req.raw.body,
-      timeout: 60000,
+      timeout,
     })
 
     return new Response(res.body, {
