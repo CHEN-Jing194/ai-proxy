@@ -202,6 +202,7 @@ app.use(async (c, next) => {
     // 打印文件上传响应状态
     if (isFileUpload) {
       console.log("[File Upload] 响应状态:", res.status)
+      console.log("[File Upload] 响应头 Content-Type:", res.headers.get("content-type"))
       if (res.status === 200) {
         console.log("[File Upload] ✅ 上传成功")
         // 读取响应体内容用于日志
